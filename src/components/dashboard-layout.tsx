@@ -40,9 +40,10 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   activeView: string;
   setActiveView: (view: string) => void;
+  onLogout?: () => void;
 }
 
-export function DashboardLayout({ children, activeView, setActiveView }: DashboardLayoutProps) {
+export function DashboardLayout({ children, activeView, setActiveView, onLogout }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-r border-border">
@@ -76,7 +77,10 @@ export function DashboardLayout({ children, activeView, setActiveView }: Dashboa
         <SidebarFooter className="border-t border-border p-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton className="text-destructive hover:bg-destructive/10">
+              <SidebarMenuButton 
+                className="text-destructive hover:bg-destructive/10"
+                onClick={onLogout}
+              >
                 <LogOut />
                 <span>Sair</span>
               </SidebarMenuButton>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -107,11 +106,10 @@ export default function CampusGateApp() {
       toast({
         variant: "destructive",
         title: "Erro de Identificação",
-        description: "Por favor, insira sua matrícula ou e-mail de porteiro."
+        description: "Por favor, insira seu nome completo."
       });
       return;
     }
-    // Simulating login - In a real app, this would check against a DB
     setGatekeeper(loginInput);
     toast({ title: "Bem-vindo!", description: `Plantão iniciado por ${loginInput}` });
   };
@@ -129,7 +127,6 @@ export default function CampusGateApp() {
       return;
     }
 
-    // Simulating registration
     setGatekeeper(name);
     toast({ title: "Cadastro realizado", description: "Conta de porteiro criada com sucesso!" });
   };
@@ -213,10 +210,10 @@ export default function CampusGateApp() {
             {authMode === 'login' ? (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="gatekeeper">E-mail ou Matrícula</Label>
+                  <Label htmlFor="gatekeeper">Nome Completo</Label>
                   <Input 
                     id="gatekeeper"
-                    placeholder="porteiro@uni.edu" 
+                    placeholder="Digite seu nome completo" 
                     value={loginInput}
                     onChange={(e) => setLoginInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
@@ -296,7 +293,10 @@ export default function CampusGateApp() {
             <Button 
               variant="link" 
               className="text-xs text-muted-foreground"
-              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'register' : 'login');
+                setLoginInput('');
+              }}
             >
               {authMode === 'login' ? 'Não possui conta? Cadastre-se' : 'Já possui conta? Faça Login'}
             </Button>
@@ -310,7 +310,14 @@ export default function CampusGateApp() {
   }
 
   return (
-    <DashboardLayout activeView={activeView} setActiveView={setActiveView}>
+    <DashboardLayout 
+      activeView={activeView} 
+      setActiveView={setActiveView}
+      onLogout={() => {
+        setGatekeeper(null);
+        setLoginInput('');
+      }}
+    >
       <div className="space-y-6 max-w-7xl mx-auto">
         
         {/* VIEW: OVERVIEW */}
@@ -326,7 +333,17 @@ export default function CampusGateApp() {
                   <p className="text-sm font-bold text-primary">{gatekeeper}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setGatekeeper(null)} className="text-destructive text-xs hover:bg-destructive/10">Trocar Operador / Sair</Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  setGatekeeper(null);
+                  setLoginInput('');
+                }} 
+                className="text-destructive text-xs hover:bg-destructive/10"
+              >
+                Trocar Operador / Sair
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
