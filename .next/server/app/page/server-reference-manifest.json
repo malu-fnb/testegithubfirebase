@@ -1,0 +1,20 @@
+{
+  "node": {
+    "40a57b3c3e88aeed4ba8e93eef63290130f54f77a9": {
+      "workers": {
+        "app/page": {
+          "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/plate-entry-assistant.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "plateEntryAssistant",
+          "filename": "src/ai/flows/plate-entry-assistant.ts"
+        }
+      },
+      "layer": {
+        "app/page": "action-browser"
+      },
+      "exportedName": "plateEntryAssistant",
+      "filename": "src/ai/flows/plate-entry-assistant.ts"
+    }
+  },
+  "edge": {}
+}
