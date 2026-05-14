@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   UserPlus, 
   CarFront, 
@@ -21,7 +23,12 @@ import {
   UserCircle,
   LogIn,
   UserCheck,
-  ShieldAlert
+  ShieldAlert,
+  KeyRound,
+  LogOut,
+  Phone,
+  Mail,
+  Fingerprint
 } from 'lucide-react';
 import { 
   initialEmployees, 
@@ -33,15 +40,21 @@ import {
 } from '@/lib/mock-db';
 import { PlateAssistant } from '@/components/plate-assistant';
 import { PlateEntryAssistantOutput } from '@/ai/flows/plate-entry-assistant';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+
+interface GatekeeperData {
+  name: string;
+  phone: string;
+  email: string;
+  cpf: string;
+}
 
 export default function CampusGateApp() {
   const { toast } = useToast();
   const [activeView, setActiveView] = useState('overview');
   
   // Auth States
-  const [gatekeeper, setGatekeeper] = useState<string | null>(null);
+  const [gatekeeper, setGatekeeper] = useState<GatekeeperData | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
   // Login Form
@@ -71,7 +84,7 @@ export default function CampusGateApp() {
   
   // Registration States
   const [newEmployee, setNewEmployee] = useState({ name: '', department: '', ra: '', email: '', phone: '' });
-  const [newVehicle, setNewVehicle] = useState({ ownerId: '', plate: '', make: '', model: '', color: '' });
+  const [newVehicle, setNewVehicle] = useState({ ownerRa: '', plate: '', make: '', model: '', color: '' });
   const [validatedPlateResult, setValidatedPlateResult] = useState<PlateEntryAssistantOutput | null>(null);
 
   // Computed data
@@ -110,12 +123,18 @@ export default function CampusGateApp() {
       });
       return;
     }
-    setGatekeeper(loginInput);
+    // Mock login persistent data
+    setGatekeeper({
+      name: loginInput,
+      phone: '(11) 99999-8888',
+      email: `${loginInput.toLowerCase().replace(/\s/g, '.')}@campusgate.com`,
+      cpf: '000.111.222-33'
+    });
     toast({ title: "Bem-vindo!", description: `Plantão iniciado por ${loginInput}` });
   };
 
   const handleRegister = () => {
-    const { name, email, cpf, password, confirmPassword } = regForm;
+    const { name, email, cpf, password, confirmPassword, phone } = regForm;
     
     if (!name || !email || !cpf || !password) {
       toast({ variant: "destructive", title: "Campos vazios", description: "Preencha todos os campos obrigatórios." });
@@ -127,8 +146,15 @@ export default function CampusGateApp() {
       return;
     }
 
-    setGatekeeper(name);
+    setGatekeeper({ name, phone, email, cpf });
     toast({ title: "Cadastro realizado", description: "Conta de porteiro criada com sucesso!" });
+  };
+
+  const handleLogout = () => {
+    setGatekeeper(null);
+    setLoginInput('');
+    setRegForm({ name: '', phone: '', email: '', cpf: '', password: '', confirmPassword: '' });
+    setActiveView('overview');
   };
 
   // App Actions
@@ -144,17 +170,31 @@ export default function CampusGateApp() {
   };
 
   const handleAddVehicle = () => {
-    if (!newVehicle.ownerId || !validatedPlateResult?.validatedPlate) return;
+    if (!newVehicle.ownerRa || !validatedPlateResult?.validatedPlate) {
+       toast({ variant: "destructive", title: "Dados incompletos", description: "Informe o RA do proprietário e valide a placa." });
+       return;
+    }
+
+    const owner = employees.find(e => e.ra.toUpperCase() === newVehicle.ownerRa.toUpperCase());
+    
+    if (!owner) {
+      toast({ variant: "destructive", title: "RA não encontrado", description: "Nenhum funcionário cadastrado com este RA." });
+      return;
+    }
+
     const vehicle = { 
-      ...newVehicle, 
-      id: `v-${Date.now()}`, 
+      id: `v-${Date.now()}`,
+      ownerId: owner.id,
       plate: validatedPlateResult.validatedPlate,
-      make: newVehicle.make || validatedPlateResult.predictedVehicleMake || 'Desconhecido'
+      make: newVehicle.make || validatedPlateResult.predictedVehicleMake || 'Desconhecido',
+      model: newVehicle.model || 'Desconhecido',
+      color: newVehicle.color || 'Desconhecida'
     };
+
     setVehicles([...vehicles, vehicle]);
-    setNewVehicle({ ownerId: '', plate: '', make: '', model: '', color: '' });
+    setNewVehicle({ ownerRa: '', plate: '', make: '', model: '', color: '' });
     setValidatedPlateResult(null);
-    toast({ title: "Sucesso", description: "Veículo registrado!" });
+    toast({ title: "Sucesso", description: `Veículo ${vehicle.plate} vinculado a ${owner.name}` });
   };
 
   const handleGateAction = (plate: string, type: 'entry' | 'exit') => {
@@ -173,7 +213,7 @@ export default function CampusGateApp() {
       type,
       timestamp: new Date(),
       ownerName: owner?.name || 'Visitante',
-      gatekeeperName: gatekeeper || 'Sistema'
+      gatekeeperName: gatekeeper?.name || 'Sistema'
     };
 
     setLogs([newLog, ...logs]);
@@ -312,10 +352,7 @@ export default function CampusGateApp() {
     <DashboardLayout 
       activeView={activeView} 
       setActiveView={setActiveView}
-      onLogout={() => {
-        setGatekeeper(null);
-        setLoginInput('');
-      }}
+      onLogout={handleLogout}
     >
       <div className="space-y-6 max-w-7xl mx-auto">
         
@@ -328,16 +365,13 @@ export default function CampusGateApp() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-tight">Porteiro em Turno</p>
-                  <p className="text-sm font-bold text-primary">{gatekeeper}</p>
+                  <p className="text-sm font-bold text-primary">{gatekeeper.name}</p>
                 </div>
               </div>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => {
-                  setGatekeeper(null);
-                  setLoginInput('');
-                }} 
+                onClick={handleLogout} 
                 className="text-destructive text-xs hover:bg-destructive/10"
               >
                 Trocar Operador / Sair
@@ -425,13 +459,88 @@ export default function CampusGateApp() {
                     <DoorOpen className="h-6 w-6 text-primary" />
                     Portaria Direta
                   </Button>
-                  <Button variant="outline" className="h-24 flex flex-col gap-2 border-accent/20 hover:border-accent hover:bg-accent/5" onClick={() => setActiveView('search')}>
-                    <Search className="h-6 w-6 text-accent" />
-                    Busca Global
+                  <Button variant="outline" className="h-24 flex flex-col gap-2 border-accent/20 hover:border-accent hover:bg-accent/5" onClick={() => setActiveView('profile')}>
+                    <UserCircle className="h-6 w-6 text-accent" />
+                    Meu Perfil
                   </Button>
                 </CardContent>
               </Card>
             </div>
+          </div>
+        )}
+
+        {activeView === 'profile' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <Card className="overflow-hidden">
+              <div className="h-32 bg-primary relative">
+                <div className="absolute -bottom-12 left-8">
+                  <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                    <AvatarImage src={`https://picsum.photos/seed/${gatekeeper.name}/200`} />
+                    <AvatarFallback className="text-xl bg-accent text-white">{gatekeeper.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                </div>
+              </div>
+              <CardHeader className="pt-16 pb-4 px-8">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-2xl font-bold">{gatekeeper.name}</CardTitle>
+                    <CardDescription className="flex items-center gap-1 mt-1">
+                      <ShieldAlert className="h-3 w-3" /> Operador de Portaria • Turno Ativo
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleLogout} className="text-destructive border-destructive hover:bg-destructive/10">
+                    <LogOut className="h-4 w-4 mr-2" /> Sair do Sistema
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="px-8 pb-8 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-3 border rounded-xl bg-muted/20">
+                      <Fingerprint className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">CPF</p>
+                        <p className="text-sm font-medium">{gatekeeper.cpf}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border rounded-xl bg-muted/20">
+                      <Phone className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Celular</p>
+                        <p className="text-sm font-medium">{gatekeeper.phone}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border rounded-xl bg-muted/20">
+                      <Mail className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">E-mail</p>
+                        <p className="text-sm font-medium">{gatekeeper.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4 p-6 border rounded-2xl bg-secondary/10 border-accent/20">
+                    <h3 className="font-bold flex items-center gap-2 text-primary">
+                      <KeyRound className="h-4 w-4 text-accent" />
+                      Segurança da Conta
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nova Senha</Label>
+                        <Input type="password" placeholder="••••••••" className="bg-white" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Confirmar Nova Senha</Label>
+                        <Input type="password" placeholder="••••••••" className="bg-white" />
+                      </div>
+                      <Button className="w-full bg-accent hover:bg-accent/90 mt-2" size="sm">
+                        Atualizar Senha
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -524,17 +633,13 @@ export default function CampusGateApp() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Proprietário (Funcionário)</Label>
-                    <Select onValueChange={(val) => setNewVehicle({...newVehicle, ownerId: val})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione por nome ou RA" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employees.map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>{emp.name} (RA: {emp.ra})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>RA do Proprietário (Funcionário)</Label>
+                    <Input 
+                      placeholder="Ex: RA2024001" 
+                      value={newVehicle.ownerRa}
+                      onChange={(e) => setNewVehicle({...newVehicle, ownerRa: e.target.value.toUpperCase()})}
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">Dica: Digite o RA cadastrado no diretório de funcionários.</p>
                   </div>
 
                   <PlateAssistant onValidated={(res) => setValidatedPlateResult(res)} />
@@ -557,7 +662,7 @@ export default function CampusGateApp() {
                     <Label>Cor Predominante</Label>
                     <Input value={newVehicle.color} onChange={e => setNewVehicle({...newVehicle, color: e.target.value})} placeholder="Ex: Prata Metálico" />
                   </div>
-                  <Button className="w-full bg-primary" onClick={handleAddVehicle} disabled={!newVehicle.ownerId || !validatedPlateResult?.isValid}>
+                  <Button className="w-full bg-primary" onClick={handleAddVehicle} disabled={!newVehicle.ownerRa || !validatedPlateResult?.isValid}>
                     <CarFront className="mr-2 h-4 w-4" /> Registrar na Frota
                   </Button>
                 </CardContent>
@@ -608,7 +713,7 @@ export default function CampusGateApp() {
                   <div className="bg-accent p-2 rounded-lg"><DoorOpen className="h-6 w-6 text-white" /></div>
                   Terminal de Controle
                 </CardTitle>
-                <CardDescription className="text-xs font-medium uppercase tracking-widest text-primary pt-2">Operador Atual: {gatekeeper}</CardDescription>
+                <CardDescription className="text-xs font-medium uppercase tracking-widest text-primary pt-2">Operador Atual: {gatekeeper.name}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">

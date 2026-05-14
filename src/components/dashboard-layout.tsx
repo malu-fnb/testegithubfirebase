@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -9,7 +10,8 @@ import {
   History, 
   ShieldCheck, 
   LogOut,
-  Search as SearchIcon
+  Search as SearchIcon,
+  UserCircle
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,6 +36,7 @@ const navItems = [
   { id: 'gate', label: 'Controle de Portaria', icon: DoorOpen },
   { id: 'search', label: 'Busca Global', icon: SearchIcon },
   { id: 'history', label: 'Histórico de Acessos', icon: History },
+  { id: 'profile', label: 'Meu Perfil', icon: UserCircle },
 ];
 
 interface DashboardLayoutProps {
