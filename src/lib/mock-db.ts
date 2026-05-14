@@ -2,7 +2,7 @@ export interface Employee {
   id: string;
   name: string;
   department: string;
-  ra: string; // Substituído role por ra
+  ra: string; // Registro Administrativo (ID da Universidade)
   email: string;
   phone: string;
 }
@@ -22,7 +22,7 @@ export interface AccessLog {
   type: 'entry' | 'exit';
   timestamp: Date;
   ownerName: string;
-  gatekeeperName: string; // Adicionado para identificar quem registrou
+  gatekeeperName: string;
 }
 
 // Initial Mock Data

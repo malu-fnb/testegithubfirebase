@@ -62,14 +62,14 @@ export default function CampusGateApp() {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
   const [logs, setLogs] = useState<AccessLog[]>(initialLogs);
   
-  // Admin Search State
+  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   
   // Gate Terminal States
   const [entryPlate, setEntryPlate] = useState('');
   const [exitPlate, setExitPlate] = useState('');
   
-  // Registration Dialog States
+  // Registration States
   const [newEmployee, setNewEmployee] = useState({ name: '', department: '', ra: '', email: '', phone: '' });
   const [newVehicle, setNewVehicle] = useState({ ownerId: '', plate: '', make: '', model: '', color: '' });
   const [validatedPlateResult, setValidatedPlateResult] = useState<PlateEntryAssistantOutput | null>(null);
@@ -185,7 +185,6 @@ export default function CampusGateApp() {
     });
   };
 
-  // Render Login/Register Screen
   if (!gatekeeper) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -320,7 +319,6 @@ export default function CampusGateApp() {
     >
       <div className="space-y-6 max-w-7xl mx-auto">
         
-        {/* VIEW: OVERVIEW */}
         {activeView === 'overview' && (
           <div className="grid gap-6">
             <div className="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
@@ -405,9 +403,6 @@ export default function CampusGateApp() {
                     ))}
                   </div>
                 </CardContent>
-                <CardFooter>
-                  <Button variant="ghost" className="w-full text-accent text-xs" onClick={() => setActiveView('history')}>Histórico Completo</Button>
-                </CardFooter>
               </Card>
 
               <Card>
@@ -440,13 +435,12 @@ export default function CampusGateApp() {
           </div>
         )}
 
-        {/* VIEW: EMPLOYEES */}
         {activeView === 'employees' && (
           <div className="space-y-6">
             <Card className="border-primary/20">
               <CardHeader>
                 <CardTitle>Cadastro de Funcionário</CardTitle>
-                <CardDescription>Registre o funcionário através do RA (ID Acadêmico).</CardDescription>
+                <CardDescription>Registre o funcionário da universidade através do seu RA.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -455,12 +449,12 @@ export default function CampusGateApp() {
                     <Input value={newEmployee.name} onChange={e => setNewEmployee({...newEmployee, name: e.target.value})} placeholder="Ex: João da Silva" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Departamento</Label>
-                    <Input value={newEmployee.department} onChange={e => setNewEmployee({...newEmployee, department: e.target.value})} placeholder="Ex: Biblioteca" />
-                  </div>
-                  <div className="space-y-2">
                     <Label>RA (Registro Administrativo)</Label>
                     <Input value={newEmployee.ra} onChange={e => setNewEmployee({...newEmployee, ra: e.target.value})} placeholder="Ex: RA24001" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Departamento</Label>
+                    <Input value={newEmployee.department} onChange={e => setNewEmployee({...newEmployee, department: e.target.value})} placeholder="Ex: Biblioteca" />
                   </div>
                   <div className="space-y-2">
                     <Label>E-mail Corporativo</Label>
@@ -472,7 +466,7 @@ export default function CampusGateApp() {
                   </div>
                   <div className="flex items-end">
                     <Button className="w-full bg-accent hover:bg-accent/90" onClick={handleAddEmployee}>
-                      <UserPlus className="mr-2 h-4 w-4" /> Cadastrar
+                      <UserPlus className="mr-2 h-4 w-4" /> Cadastrar Funcionário
                     </Button>
                   </div>
                 </div>
@@ -483,7 +477,7 @@ export default function CampusGateApp() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Diretório de Funcionários</CardTitle>
-                  <CardDescription>Gerencie o acesso dos funcionários por RA.</CardDescription>
+                  <CardDescription>Gerencie o acesso através do RA universitário.</CardDescription>
                 </div>
                 <div className="relative w-72">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -520,7 +514,6 @@ export default function CampusGateApp() {
           </div>
         )}
 
-        {/* VIEW: VEHICLES */}
         {activeView === 'vehicles' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -607,7 +600,6 @@ export default function CampusGateApp() {
           </div>
         )}
 
-        {/* VIEW: GATE */}
         {activeView === 'gate' && (
           <div className="max-w-4xl mx-auto space-y-6">
             <Card className="border-accent shadow-lg border-2">
@@ -642,7 +634,6 @@ export default function CampusGateApp() {
                         <LogIn className="h-6 w-6" />
                       </Button>
                     </div>
-                    <p className="text-[10px] text-green-600 font-medium text-center">Pressione ENTER para confirmar a entrada</p>
                   </div>
 
                   <div className="space-y-4 p-6 border-2 border-dashed rounded-2xl bg-orange-50/20 border-orange-200">
@@ -667,45 +658,13 @@ export default function CampusGateApp() {
                         <LogIn className="h-6 w-6" />
                       </Button>
                     </div>
-                    <p className="text-[10px] text-orange-600 font-medium text-center">Pressione ENTER para confirmar a saída</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-muted-foreground/10">
-              <CardHeader className="py-4 border-b">
-                <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <History className="h-4 w-4" /> Fluxo em Tempo Real
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-3">
-                  {logs.slice(0, 4).map(log => (
-                    <div key={log.id} className="flex justify-between items-center p-4 border rounded-xl bg-card shadow-sm animate-in fade-in slide-in-from-bottom-2">
-                       <div className="flex items-center gap-4">
-                          <Badge className={log.type === 'entry' ? 'bg-green-600 hover:bg-green-600' : 'bg-orange-600 hover:bg-orange-600'}>
-                            {log.type === 'entry' ? 'ENTRADA' : 'SAÍDA'}
-                          </Badge>
-                          <div>
-                            <span className="font-mono font-bold text-lg mr-2 tracking-widest">{log.vehiclePlate}</span>
-                            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-                              Dono: {log.ownerName} | Operador: {log.gatekeeperName}
-                            </div>
-                          </div>
-                       </div>
-                       <span className="text-xs font-bold font-mono text-primary bg-secondary/50 px-2 py-1 rounded">
-                         {log.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                       </span>
-                    </div>
-                  ))}
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* VIEW: SEARCH */}
         {activeView === 'search' && (
           <div className="space-y-6">
              <Card className="bg-primary text-white border-none overflow-hidden shadow-xl">
@@ -714,26 +673,25 @@ export default function CampusGateApp() {
                     <div className="bg-accent/20 p-4 rounded-full"><Search className="h-10 w-10 text-accent" /></div>
                     <div>
                       <CardTitle className="text-3xl font-bold">Busca Unificada CampusGate</CardTitle>
-                      <CardDescription className="text-white/70">Consulte veículos, funcionários ou porteiros registrados.</CardDescription>
+                      <CardDescription className="text-white/70">Consulte veículos ou funcionários pelo RA universitário.</CardDescription>
                     </div>
                     <div className="w-full max-w-2xl relative">
                       <Search className="absolute left-4 top-4 h-6 w-6 text-muted-foreground" />
                       <Input 
                         placeholder="Nome, RA, Placa ou CPF..." 
-                        className="h-14 pl-12 text-lg bg-white text-foreground rounded-2xl border-accent border-2 focus:ring-accent shadow-lg" 
+                        className="h-14 pl-12 text-lg bg-white text-foreground rounded-2xl border-accent border-2 shadow-lg" 
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                       />
                     </div>
                  </div>
-                 <div className="absolute top-0 right-0 h-full w-48 bg-accent/10 skew-x-12 transform translate-x-24"></div>
                </CardContent>
              </Card>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <Card className="shadow-sm">
                   <CardHeader className="bg-muted/30 border-b">
-                    <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Correspondências: Funcionários</CardTitle>
+                    <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Funcionários</CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="space-y-3">
@@ -752,7 +710,7 @@ export default function CampusGateApp() {
 
                 <Card className="shadow-sm">
                   <CardHeader className="bg-muted/30 border-b">
-                    <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Correspondências: Frota</CardTitle>
+                    <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Frota</CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="space-y-3">
@@ -760,7 +718,7 @@ export default function CampusGateApp() {
                         <div key={v.id} className="p-4 border rounded-xl hover:border-accent transition-all flex justify-between items-center bg-card shadow-sm">
                           <div>
                             <p className="font-mono font-bold text-primary text-lg tracking-widest">{v.plate}</p>
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase">{v.make} {v.model} • {v.color}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase">{v.make} {v.model} • RA Dono: {employees.find(e => e.id === v.ownerId)?.ra}</p>
                           </div>
                           <Button variant="ghost" size="sm" onClick={() => { setActiveView('vehicles'); setSearchQuery(v.plate); }}><Info className="h-4 w-4 text-accent" /></Button>
                         </div>
@@ -772,15 +730,13 @@ export default function CampusGateApp() {
           </div>
         )}
 
-        {/* VIEW: HISTORY */}
         {activeView === 'history' && (
           <Card className="shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between bg-muted/20 border-b py-6">
               <div>
                 <CardTitle className="text-xl">Auditoria de Acessos</CardTitle>
-                <CardDescription>Registro completo de entradas e saídas do Campus vinculados ao operador.</CardDescription>
+                <CardDescription>Registro de entradas e saídas do Campus vinculados ao operador.</CardDescription>
               </div>
-              <Button variant="outline" size="sm" className="font-bold border-primary text-primary hover:bg-primary hover:text-white">Exportar Relatório</Button>
             </CardHeader>
             <CardContent className="pt-6">
               <Table>
@@ -798,16 +754,9 @@ export default function CampusGateApp() {
                     <TableRow key={log.id} className="hover:bg-muted/20 transition-colors">
                       <TableCell className="text-xs font-mono font-bold">{log.timestamp.toLocaleString()}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          {log.type === 'entry' ? (
-                            <ArrowDownLeft className="h-3 w-3 text-green-600" />
-                          ) : (
-                            <ArrowUpRight className="h-3 w-3 text-orange-600" />
-                          )}
-                          <span className={`text-xs font-bold ${log.type === 'entry' ? 'text-green-700' : 'text-orange-700'}`}>
-                            {log.type === 'entry' ? 'ENTRADA' : 'SAÍDA'}
-                          </span>
-                        </div>
+                        <span className={`text-xs font-bold ${log.type === 'entry' ? 'text-green-700' : 'text-orange-700'}`}>
+                          {log.type === 'entry' ? 'ENTRADA' : 'SAÍDA'}
+                        </span>
                       </TableCell>
                       <TableCell className="font-mono font-bold tracking-widest text-primary">{log.vehiclePlate}</TableCell>
                       <TableCell className="text-xs font-medium">
