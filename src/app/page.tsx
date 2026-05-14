@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -352,7 +351,6 @@ export default function CampusGateApp() {
     <DashboardLayout 
       activeView={activeView} 
       setActiveView={setActiveView}
-      onLogout={handleLogout}
     >
       <div className="space-y-6 max-w-7xl mx-auto">
         
@@ -368,14 +366,6 @@ export default function CampusGateApp() {
                   <p className="text-sm font-bold text-primary">{gatekeeper.name}</p>
                 </div>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleLogout} 
-                className="text-destructive text-xs hover:bg-destructive/10"
-              >
-                Trocar Operador / Sair
-              </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

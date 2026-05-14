@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -9,14 +8,12 @@ import {
   DoorOpen, 
   History, 
   ShieldCheck, 
-  LogOut,
   Search as SearchIcon,
   UserCircle
 } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -46,7 +43,7 @@ interface DashboardLayoutProps {
   onLogout?: () => void;
 }
 
-export function DashboardLayout({ children, activeView, setActiveView, onLogout }: DashboardLayoutProps) {
+export function DashboardLayout({ children, activeView, setActiveView }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-r border-border">
@@ -77,19 +74,6 @@ export function DashboardLayout({ children, activeView, setActiveView, onLogout 
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter className="border-t border-border p-2">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton 
-                className="text-destructive hover:bg-destructive/10"
-                onClick={onLogout}
-              >
-                <LogOut />
-                <span>Sair</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
       </Sidebar>
       <SidebarInset className="bg-background">
         <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
