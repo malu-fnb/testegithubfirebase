@@ -17,7 +17,9 @@ import {
   Search, 
   Info, 
   History, 
-  DoorOpen 
+  DoorOpen,
+  UserCircle,
+  LogIn
 } from 'lucide-react';
 import { 
   initialEmployees, 
@@ -30,18 +32,25 @@ import {
 import { PlateAssistant } from '@/components/plate-assistant';
 import { PlateEntryAssistantOutput } from '@/ai/flows/plate-entry-assistant';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 
 export default function CampusGateApp() {
+  const { toast } = useToast();
   const [activeView, setActiveView] = useState('overview');
+  const [gatekeeper, setGatekeeper] = useState<string | null>(null);
+  const [gatekeeperInput, setGatekeeperInput] = useState('');
+  
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
   const [logs, setLogs] = useState<AccessLog[]>(initialLogs);
   
   // Forms states
   const [searchQuery, setSearchQuery] = useState('');
+  const [entryPlate, setEntryPlate] = useState('');
+  const [exitPlate, setExitPlate] = useState('');
   
   // Registration States
-  const [newEmployee, setNewEmployee] = useState({ name: '', department: '', role: '', email: '', phone: '' });
+  const [newEmployee, setNewEmployee] = useState({ name: '', department: '', ra: '', email: '', phone: '' });
   const [newVehicle, setNewVehicle] = useState({ ownerId: '', plate: '', make: '', model: '', color: '' });
   const [validatedPlateResult, setValidatedPlateResult] = useState<PlateEntryAssistantOutput | null>(null);
 
@@ -49,7 +58,8 @@ export default function CampusGateApp() {
   const filteredEmployees = useMemo(() => {
     return employees.filter(e => 
       e.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      e.department.toLowerCase().includes(searchQuery.toLowerCase())
+      e.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.ra.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [employees, searchQuery]);
 
@@ -71,11 +81,31 @@ export default function CampusGateApp() {
   }, [logs, employees, vehicles]);
 
   // Actions
+  const handleLogin = () => {
+    if (gatekeeperInput.trim().length < 3) {
+      toast({
+        variant: "destructive",
+        title: "Erro de Identificação",
+        description: "Por favor, insira o nome completo ou ID do porteiro."
+      });
+      return;
+    }
+    setGatekeeper(gatekeeperInput);
+  };
+
   const handleAddEmployee = () => {
-    if (!newEmployee.name || !newEmployee.email) return;
+    if (!newEmployee.name || !newEmployee.ra) {
+      toast({
+        variant: "destructive",
+        title: "Campos obrigatórios",
+        description: "Nome e RA são necessários."
+      });
+      return;
+    }
     const employee = { ...newEmployee, id: Date.now().toString() };
     setEmployees([...employees, employee]);
-    setNewEmployee({ name: '', department: '', role: '', email: '', phone: '' });
+    setNewEmployee({ name: '', department: '', ra: '', email: '', phone: '' });
+    toast({ title: "Sucesso", description: "Funcionário cadastrado com sucesso!" });
   };
 
   const handleAddVehicle = () => {
@@ -89,22 +119,79 @@ export default function CampusGateApp() {
     setVehicles([...vehicles, vehicle]);
     setNewVehicle({ ownerId: '', plate: '', make: '', model: '', color: '' });
     setValidatedPlateResult(null);
+    toast({ title: "Sucesso", description: "Veículo registrado!" });
   };
 
   const handleGateAction = (plate: string, type: 'entry' | 'exit') => {
-    const vehicle = vehicles.find(v => v.plate === plate);
-    if (!vehicle) return;
+    const cleanPlate = plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const vehicle = vehicles.find(v => v.plate.toUpperCase().replace(/[^A-Z0-9]/g, '') === cleanPlate);
+    
+    if (!vehicle) {
+      toast({
+        variant: "destructive",
+        title: "Veículo não autorizado",
+        description: `A placa ${plate} não possui cadastro ativo.`
+      });
+      return;
+    }
+
     const owner = employees.find(e => e.id === vehicle.ownerId);
     
     const newLog: AccessLog = {
       id: `l-${Date.now()}`,
-      vehiclePlate: plate,
+      vehiclePlate: vehicle.plate,
       type,
       timestamp: new Date(),
-      ownerName: owner?.name || 'Visitante'
+      ownerName: owner?.name || 'Visitante',
+      gatekeeperName: gatekeeper || 'Sistema'
     };
+
     setLogs([newLog, ...logs]);
+    
+    if (type === 'entry') setEntryPlate('');
+    else setExitPlate('');
+
+    toast({
+      title: type === 'entry' ? "Entrada Registrada" : "Saída Registrada",
+      description: `Veículo ${vehicle.plate} (${owner?.name})`
+    });
   };
+
+  if (!gatekeeper) {
+    return (
+      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
+          <CardHeader className="text-center space-y-1">
+            <div className="flex justify-center mb-4">
+              <div className="bg-primary p-3 rounded-full shadow-lg">
+                <DoorOpen className="h-8 w-8 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl">Acesso ao CampusGate</CardTitle>
+            <CardDescription>Identifique o porteiro responsável pelo turno</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="gatekeeper">Identificação do Porteiro</Label>
+              <Input 
+                id="gatekeeper"
+                placeholder="Nome completo ou Matrícula" 
+                value={gatekeeperInput}
+                onChange={(e) => setGatekeeperInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+            <Button className="w-full bg-accent hover:bg-accent/90" onClick={handleLogin}>
+              <LogIn className="mr-2 h-4 w-4" /> Iniciar Plantão
+            </Button>
+          </CardContent>
+          <CardFooter className="text-xs text-muted-foreground justify-center">
+            Sistema de Auditoria de Acessos Acadêmicos
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <DashboardLayout activeView={activeView} setActiveView={setActiveView}>
@@ -113,6 +200,19 @@ export default function CampusGateApp() {
         {/* VIEW: OVERVIEW */}
         {activeView === 'overview' && (
           <div className="grid gap-6">
+            <div className="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="bg-secondary p-2 rounded-full">
+                  <UserCircle className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase">Operador Atual</p>
+                  <p className="text-sm font-bold">{gatekeeper}</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setGatekeeper(null)} className="text-destructive text-xs">Sair / Trocar Porteiro</Button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="border-l-4 border-l-accent">
                 <CardHeader className="pb-2">
@@ -212,7 +312,7 @@ export default function CampusGateApp() {
             <Card>
               <CardHeader>
                 <CardTitle>Cadastro de Funcionário</CardTitle>
-                <CardDescription>Insira os dados do novo membro do corpo administrativo/acadêmico.</CardDescription>
+                <CardDescription>Insira os dados do novo membro usando o RA institucional.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -225,8 +325,8 @@ export default function CampusGateApp() {
                     <Input value={newEmployee.department} onChange={e => setNewEmployee({...newEmployee, department: e.target.value})} placeholder="Ex: Recursos Humanos" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Cargo/Papel</Label>
-                    <Input value={newEmployee.role} onChange={e => setNewEmployee({...newEmployee, role: e.target.value})} placeholder="Ex: Professor Titular" />
+                    <Label>RA (Registro Administrativo)</Label>
+                    <Input value={newEmployee.ra} onChange={e => setNewEmployee({...newEmployee, ra: e.target.value})} placeholder="Ex: RA2024-X123" />
                   </div>
                   <div className="space-y-2">
                     <Label>E-mail Institucional</Label>
@@ -250,11 +350,11 @@ export default function CampusGateApp() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Diretório de Funcionários</CardTitle>
-                    <CardDescription>Lista de todos os funcionários aptos ao estacionamento.</CardDescription>
+                    <CardDescription>Busque por nome, RA ou departamento.</CardDescription>
                   </div>
                   <div className="relative w-64">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Buscar..." className="pl-8" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <Input placeholder="Buscar por RA ou Nome..." className="pl-8" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   </div>
                 </div>
               </CardHeader>
@@ -262,9 +362,9 @@ export default function CampusGateApp() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>RA</TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Departamento</TableHead>
-                      <TableHead>Cargo</TableHead>
                       <TableHead>Contato</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -272,9 +372,9 @@ export default function CampusGateApp() {
                   <TableBody>
                     {filteredEmployees.map(emp => (
                       <TableRow key={emp.id}>
+                        <TableCell className="font-mono font-bold text-xs">{emp.ra}</TableCell>
                         <TableCell className="font-medium">{emp.name}</TableCell>
                         <TableCell>{emp.department}</TableCell>
-                        <TableCell>{emp.role}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{emp.email}</TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
@@ -306,7 +406,7 @@ export default function CampusGateApp() {
                       </SelectTrigger>
                       <SelectContent>
                         {employees.map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>{emp.name} ({emp.department})</SelectItem>
+                          <SelectItem key={emp.id} value={emp.id}>{emp.name} (RA: {emp.ra})</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -385,7 +485,7 @@ export default function CampusGateApp() {
                   <DoorOpen className="h-8 w-8 text-accent" />
                   Terminal de Portaria
                 </CardTitle>
-                <CardDescription>Controle de entrada e saída em tempo real</CardDescription>
+                <CardDescription>Operador: <span className="font-bold text-primary">{gatekeeper}</span></CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
@@ -393,46 +493,50 @@ export default function CampusGateApp() {
                     <div className="flex items-center gap-2 text-green-700 font-bold mb-4">
                       <ArrowDownLeft className="h-5 w-5" /> ENTRADA DE VEÍCULO
                     </div>
-                    <Label>Identificar Placa</Label>
-                    <Select onValueChange={(val) => handleGateAction(val, 'entry')}>
-                      <SelectTrigger className="h-12 text-lg font-mono">
-                        <SelectValue placeholder="--- --- ---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {vehicles.map(v => (
-                          <SelectItem key={v.id} value={v.plate}>
-                            <div className="flex justify-between w-64">
-                              <span className="font-mono font-bold">{v.plate}</span>
-                              <span className="text-muted-foreground text-xs">{employees.find(e => e.id === v.ownerId)?.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">Selecione a placa detectada para registrar entrada automática.</p>
+                    <Label>Digitar Placa</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        className="h-12 text-2xl font-mono text-center tracking-[0.2em] bg-white border-green-300 uppercase"
+                        placeholder="ABC1234"
+                        value={entryPlate}
+                        onChange={(e) => setEntryPlate(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && handleGateAction(entryPlate, 'entry')}
+                      />
+                      <Button 
+                        size="icon" 
+                        className="h-12 w-12 bg-green-600 hover:bg-green-700" 
+                        onClick={() => handleGateAction(entryPlate, 'entry')}
+                        disabled={!entryPlate}
+                      >
+                        <LogIn className="h-6 w-6" />
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground text-center">Pressione ENTER para confirmar</p>
                   </div>
 
                   <div className="space-y-4 p-6 border-2 border-dashed rounded-xl bg-orange-50/30 border-orange-200">
                     <div className="flex items-center gap-2 text-orange-700 font-bold mb-4">
                       <ArrowUpRight className="h-5 w-5" /> SAÍDA DE VEÍCULO
                     </div>
-                    <Label>Identificar Placa</Label>
-                    <Select onValueChange={(val) => handleGateAction(val, 'exit')}>
-                      <SelectTrigger className="h-12 text-lg font-mono">
-                        <SelectValue placeholder="--- --- ---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {vehicles.map(v => (
-                          <SelectItem key={v.id} value={v.plate}>
-                            <div className="flex justify-between w-64">
-                              <span className="font-mono font-bold">{v.plate}</span>
-                              <span className="text-muted-foreground text-xs">{employees.find(e => e.id === v.ownerId)?.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">Selecione a placa detectada para registrar saída automática.</p>
+                    <Label>Digitar Placa</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        className="h-12 text-2xl font-mono text-center tracking-[0.2em] bg-white border-orange-300 uppercase"
+                        placeholder="ABC1234"
+                        value={exitPlate}
+                        onChange={(e) => setExitPlate(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && handleGateAction(exitPlate, 'exit')}
+                      />
+                      <Button 
+                        size="icon" 
+                        className="h-12 w-12 bg-orange-600 hover:bg-orange-700" 
+                        onClick={() => handleGateAction(exitPlate, 'exit')}
+                        disabled={!exitPlate}
+                      >
+                        <LogIn className="h-6 w-6" />
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground text-center">Pressione ENTER para confirmar</p>
                   </div>
                 </div>
               </CardContent>
@@ -440,7 +544,7 @@ export default function CampusGateApp() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Últimos Registros</CardTitle>
+                <CardTitle>Últimos Registros do Turno</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -453,6 +557,7 @@ export default function CampusGateApp() {
                           <div>
                             <span className="font-mono font-bold mr-2">{log.vehiclePlate}</span>
                             <span className="text-sm text-muted-foreground">({log.ownerName})</span>
+                            <div className="text-[10px] text-muted-foreground">Porteiro: {log.gatekeeperName}</div>
                           </div>
                        </div>
                        <span className="text-xs font-medium text-muted-foreground">
@@ -475,7 +580,7 @@ export default function CampusGateApp() {
                     <Search className="h-12 w-12 text-accent" />
                     <div>
                       <CardTitle className="text-2xl">Busca Global do Sistema</CardTitle>
-                      <CardDescription className="text-white/80">Pesquise por qualquer termo: Placa, Nome, Departamento ou Modelo de Veículo.</CardDescription>
+                      <CardDescription className="text-white/80">Pesquise por qualquer termo: Placa, Nome, RA ou Departamento.</CardDescription>
                     </div>
                     <div className="w-full max-w-2xl relative">
                       <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
@@ -502,9 +607,9 @@ export default function CampusGateApp() {
                         <div key={e.id} className="p-3 border rounded-md hover:border-accent transition-colors flex justify-between items-center">
                           <div>
                             <p className="font-bold">{e.name}</p>
-                            <p className="text-xs text-muted-foreground">{e.department} - {e.role}</p>
+                            <p className="text-xs text-muted-foreground">RA: {e.ra} - {e.department}</p>
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => { setActiveView('employees'); setSearchQuery(e.name); }}><Info className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => { setActiveView('employees'); setSearchQuery(e.ra); }}><Info className="h-4 w-4" /></Button>
                         </div>
                       )) : <p className="text-sm text-muted-foreground text-center py-4">Nenhum funcionário encontrado.</p>}
                     </div>
@@ -539,7 +644,7 @@ export default function CampusGateApp() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Histórico de Registros</CardTitle>
-                <CardDescription>Auditoria completa de todos os acessos ao Campus.</CardDescription>
+                <CardDescription>Auditoria completa de todos os acessos vinculados aos porteiros.</CardDescription>
               </div>
               <Button variant="outline" size="sm">Exportar CSV</Button>
             </CardHeader>
@@ -551,7 +656,7 @@ export default function CampusGateApp() {
                     <TableHead>Operação</TableHead>
                     <TableHead>Placa</TableHead>
                     <TableHead>Funcionário</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Porteiro Resp.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -571,7 +676,7 @@ export default function CampusGateApp() {
                       <TableCell className="font-mono font-bold">{log.vehiclePlate}</TableCell>
                       <TableCell className="text-sm">{log.ownerName}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px] uppercase">Processado</Badge>
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold">{log.gatekeeperName}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
