@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,9 +30,6 @@ import {
   Fingerprint
 } from 'lucide-react';
 import {
-  initialEmployees,
-  initialVehicles,
-  initialLogs,
   type Employee,
   type Vehicle,
   type AccessLog
@@ -40,6 +37,32 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+
+async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.message || 'Erro na comunicação com o backend.');
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json();
+}
+
+function normalizePlateInput(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+}
+
 
 interface GatekeeperData {
   name: string;
@@ -70,9 +93,10 @@ export default function CampusGateApp() {
   });
 
   // App Data States
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
-  const [logs, setLogs] = useState<AccessLog[]>(initialLogs);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [logs, setLogs] = useState<AccessLog[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +108,34 @@ export default function CampusGateApp() {
   // Registration States
   const [newEmployee, setNewEmployee] = useState({ name: '', department: '', ra: '', email: '', phone: '' });
   const [newVehicle, setNewVehicle] = useState({ ownerRa: '', plate: '', make: '', model: '', color: '' });
+
+  const loadApplicationData = async () => {
+    setIsLoadingData(true);
+
+    try {
+      const [employeesData, vehiclesData, logsData] = await Promise.all([
+        apiRequest<Employee[]>('/employees'),
+        apiRequest<Vehicle[]>('/vehicles'),
+        apiRequest<AccessLog[]>('/parking-records'),
+      ]);
+
+      setEmployees(employeesData);
+      setVehicles(vehiclesData);
+      setLogs(logsData.map((log) => ({ ...log, timestamp: new Date(log.timestamp) })));
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao carregar dados',
+        description: error instanceof Error ? error.message : 'Não foi possível conectar ao backend.',
+      });
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    loadApplicationData();
+  }, []);
 
   // Computed data
   const filteredEmployees = useMemo(() => {
@@ -107,7 +159,9 @@ export default function CampusGateApp() {
     return {
       currentOccupancy: Math.max(0, activeEntries - activeExits),
       totalEmployees: employees.length,
-      totalVehicles: vehicles.length
+      totalVehicles: vehicles.length,
+      totalEntries: activeEntries,
+      totalExits: activeExits
     };
   }, [logs, employees, vehicles]);
 
@@ -121,26 +175,34 @@ export default function CampusGateApp() {
   };
 
   // Auth Actions
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (loginInput.trim().length < 3) {
       toast({
         variant: "destructive",
         title: "Erro de Identificação",
-        description: "Por favor, insira seu nome completo."
+        description: "Por favor, insira seu nome completo ou e-mail."
       });
       return;
     }
-    // Mock login persistent data
-    setGatekeeper({
-      name: loginInput,
-      phone: '(11) 99999-8888',
-      email: `${loginInput.toLowerCase().replace(/\s/g, '.')}@campusgate.com`,
-      cpf: '000.111.222-33'
-    });
-    showSuccessToast("Bem-vindo!", `Plantão iniciado por ${loginInput}`);
+
+    try {
+      const data = await apiRequest<GatekeeperData>('/gatekeepers/login', {
+        method: 'POST',
+        body: JSON.stringify({ name: loginInput }),
+      });
+
+      setGatekeeper(data);
+      showSuccessToast("Bem-vindo!", `Plantão iniciado por ${data.name}`);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao entrar',
+        description: error instanceof Error ? error.message : 'Não foi possível iniciar o plantão.',
+      });
+    }
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     const { name, email, cpf, password, confirmPassword, phone } = regForm;
 
     if (!name || !email || !cpf || !password) {
@@ -153,8 +215,21 @@ export default function CampusGateApp() {
       return;
     }
 
-    setGatekeeper({ name, phone, email, cpf });
-    showSuccessToast("Cadastro realizado", "Conta de porteiro criada com sucesso!");
+    try {
+      const data = await apiRequest<GatekeeperData>('/gatekeepers/register', {
+        method: 'POST',
+        body: JSON.stringify({ name, phone, email, cpf, password }),
+      });
+
+      setGatekeeper(data);
+      showSuccessToast("Cadastro realizado", "Conta de porteiro criada com sucesso!");
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao cadastrar porteiro',
+        description: error instanceof Error ? error.message : 'Não foi possível cadastrar o porteiro.',
+      });
+    }
   };
 
   const handleLogout = () => {
@@ -165,56 +240,71 @@ export default function CampusGateApp() {
   };
 
   // App Actions
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     if (!newEmployee.name || !newEmployee.ra) {
-      toast({ variant: "destructive", title: "Erro no cadastro", description: "Nome e RA são obrigatórios." });
+      toast({ variant: "destructive", title: "Erro no cadastro", description: "Nome e Registro são obrigatórios." });
       return;
     }
-    const employee = { ...newEmployee, id: Date.now().toString() };
-    setEmployees([...employees, employee]);
-    setNewEmployee({ name: '', department: '', ra: '', email: '', phone: '' });
-    showSuccessToast("Sucesso", "Funcionário cadastrado!");
+
+    try {
+      const employee = await apiRequest<Employee>('/employees', {
+        method: 'POST',
+        body: JSON.stringify(newEmployee),
+      });
+
+      setEmployees((current) => [employee, ...current]);
+      setNewEmployee({ name: '', department: '', ra: '', email: '', phone: '' });
+      showSuccessToast("Sucesso", "Funcionário cadastrado!");
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao cadastrar funcionário',
+        description: error instanceof Error ? error.message : 'Não foi possível cadastrar o funcionário.',
+      });
+    }
   };
 
-  const handleAddVehicle = () => {
-    if (!newVehicle.ownerRa || !newVehicle.plate) {
+  const handleAddVehicle = async () => {
+    if (!newVehicle.ownerRa || !newVehicle.plate || !newVehicle.make || !newVehicle.model || !newVehicle.color) {
       toast({
         variant: "destructive",
         title: "Dados incompletos",
-        description: "Informe o RA do proprietário e a placa do veículo.",
+        description: "Informe Registro, placa, marca, modelo e cor predominante.",
       });
       return;
     }
 
-    const owner = employees.find(
-        (e) => e.ra.toUpperCase() === newVehicle.ownerRa.toUpperCase(),
-    );
+    const normalizedPlate = normalizePlateInput(newVehicle.plate);
 
-    if (!owner) {
+    if (vehicles.some((vehicle) => vehicle.plate === normalizedPlate)) {
       toast({
-        variant: "destructive",
-        title: "RA não encontrado",
-        description: "Nenhum funcionário cadastrado com este RA.",
+        variant: 'destructive',
+        title: 'Placa duplicada',
+        description: 'Esta placa já está cadastrada no sistema.',
       });
       return;
     }
 
-    const vehicle = {
-      id: `v-${Date.now()}`,
-      ownerId: owner.id,
-      plate: newVehicle.plate.toUpperCase().replace(/[^A-Z0-9]/g, ''),
-      make: newVehicle.make || 'Desconhecido',
-      model: newVehicle.model || 'Desconhecido',
-      color: newVehicle.color || 'Desconhecida',
-    };
+    try {
+      const vehicle = await apiRequest<Vehicle>('/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...newVehicle, plate: normalizedPlate }),
+      });
 
-    setVehicles([...vehicles, vehicle]);
-    setNewVehicle({ ownerRa: '', plate: '', make: '', model: '', color: '' });
+      setVehicles((current) => [vehicle, ...current]);
+      setNewVehicle({ ownerRa: '', plate: '', make: '', model: '', color: '' });
 
-    showSuccessToast(
-        "Sucesso",
-        `Veículo ${vehicle.plate} vinculado a ${owner.name}`,
-    );
+      showSuccessToast(
+          "Sucesso",
+          `Veículo ${vehicle.plate} vinculado com sucesso.`,
+      );
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao cadastrar veículo',
+        description: error instanceof Error ? error.message : 'Não foi possível cadastrar o veículo.',
+      });
+    }
   };
 
   const handleDeleteEmployee = async (employeeId: string) => {
@@ -225,23 +315,9 @@ export default function CampusGateApp() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/employees/${employeeId}`, {
+      await apiRequest<void>(`/employees/${employeeId}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => null);
-
-        toast({
-          variant: 'destructive',
-          title: 'Erro ao excluir funcionário',
-          description:
-              error?.message ||
-              'Não foi possível remover o funcionário do banco de dados.',
-        });
-
-        return;
-      }
 
       const employeeVehicles = vehicles.filter((v) => v.ownerId === employeeId);
       const employeeVehiclePlates = employeeVehicles.map((v) => v.plate);
@@ -259,8 +335,8 @@ export default function CampusGateApp() {
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Erro de conexão',
-        description: 'Não foi possível conectar ao backend.',
+        title: 'Erro ao excluir funcionário',
+        description: error instanceof Error ? error.message : 'Não foi possível remover o funcionário.',
       });
     }
   };
@@ -273,23 +349,9 @@ export default function CampusGateApp() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/vehicles/${vehicleId}`, {
+      await apiRequest<void>(`/vehicles/${vehicleId}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => null);
-
-        toast({
-          variant: 'destructive',
-          title: 'Erro ao excluir veículo',
-          description:
-              error?.message ||
-              'Não foi possível remover o veículo do banco de dados.',
-        });
-
-        return;
-      }
 
       setVehicles((current) => current.filter((v) => v.id !== vehicleId));
       setLogs((current) =>
@@ -303,38 +365,48 @@ export default function CampusGateApp() {
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Erro de conexão',
-        description: 'Não foi possível conectar ao backend.',
+        title: 'Erro ao excluir veículo',
+        description: error instanceof Error ? error.message : 'Não foi possível remover o veículo.',
       });
     }
   };
 
-  const handleGateAction = (plate: string, type: 'entry' | 'exit') => {
-    const cleanPlate = plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const vehicle = vehicles.find(v => v.plate.toUpperCase().replace(/[^A-Z0-9]/g, '') === cleanPlate);
+  const handleGateAction = async (plate: string, type: 'entry' | 'exit') => {
+    const cleanPlate = normalizePlateInput(plate);
 
-    if (!vehicle) {
-      toast({ variant: "destructive", title: "Não autorizado", description: `Placa ${plate} não encontrada.` });
+    if (!cleanPlate) {
+      toast({ variant: 'destructive', title: 'Placa obrigatória', description: 'Informe a placa do veículo.' });
       return;
     }
 
-    const owner = employees.find(e => e.id === vehicle.ownerId);
-    const newLog: AccessLog = {
-      id: `l-${Date.now()}`,
-      vehiclePlate: vehicle.plate,
-      type,
-      timestamp: new Date(),
-      ownerName: owner?.name || 'Visitante',
-      gatekeeperName: gatekeeper?.name || 'Sistema'
-    };
+    try {
+      const newLog = await apiRequest<AccessLog>(`/parking-records/${type}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          plate: cleanPlate,
+          gatekeeperName: gatekeeper?.name || 'Sistema',
+        }),
+      });
 
-    setLogs([newLog, ...logs]);
-    if (type === 'entry') setEntryPlate(''); else setExitPlate('');
+      setLogs((current) => [{ ...newLog, timestamp: new Date(newLog.timestamp) }, ...current]);
 
-    showSuccessToast(
-        type === 'entry' ? "Entrada Liberada" : "Saída Liberada",
-        `Veículo ${vehicle.plate} (${owner?.name})`,
-    );
+      if (type === 'entry') {
+        setEntryPlate('');
+      } else {
+        setExitPlate('');
+      }
+
+      showSuccessToast(
+          type === 'entry' ? "Entrada Liberada" : "Saída Liberada",
+          `Veículo ${newLog.vehiclePlate} (${newLog.ownerName})`,
+      );
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: type === 'entry' ? 'Entrada não permitida' : 'Saída não permitida',
+        description: error instanceof Error ? error.message : 'Não foi possível registrar a movimentação.',
+      });
+    }
   };
 
   if (!gatekeeper) {
@@ -481,7 +553,7 @@ export default function CampusGateApp() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                   <Card className="border-l-4 border-l-accent shadow-sm">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Pátio Atual</CardTitle>
@@ -504,6 +576,22 @@ export default function CampusGateApp() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">{stats.totalVehicles}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-green-600 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Entradas Registradas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold">{stats.totalEntries}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-orange-600 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Saídas Registradas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold">{stats.totalExits}</div>
                     </CardContent>
                   </Card>
                 </div>
@@ -652,7 +740,7 @@ export default function CampusGateApp() {
                 <Card className="border-primary/20">
                   <CardHeader>
                     <CardTitle>Cadastro de Funcionário</CardTitle>
-                    <CardDescription>Registre o funcionário da universidade através do seu RA.</CardDescription>
+                    <CardDescription>Registre a pessoa usando apenas o número de registro.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -661,8 +749,8 @@ export default function CampusGateApp() {
                         <Input value={newEmployee.name} onChange={e => setNewEmployee({...newEmployee, name: e.target.value})} placeholder="Ex: João da Silva" />
                       </div>
                       <div className="space-y-2">
-                        <Label>RA (Registro Administrativo)</Label>
-                        <Input value={newEmployee.ra} onChange={e => setNewEmployee({...newEmployee, ra: e.target.value})} placeholder="Ex: RA24001" />
+                        <Label>Registro</Label>
+                        <Input value={newEmployee.ra} onChange={e => setNewEmployee({...newEmployee, ra: e.target.value})} placeholder="Ex: RA2024001" />
                       </div>
                       <div className="space-y-2">
                         <Label>Departamento</Label>
@@ -674,7 +762,7 @@ export default function CampusGateApp() {
                       </div>
                       <div className="space-y-2">
                         <Label>Telefone</Label>
-                        <Input value={newEmployee.phone} onChange={e => setNewEmployee({...newEmployee, phone: e.target.value})} placeholder="(11) 90000-0000" />
+                        <Input value={newEmployee.phone} onChange={e => setNewEmployee({...newEmployee, phone: e.target.value})} placeholder="98186875030" />
                       </div>
                       <div className="flex items-end">
                         <Button className="w-full bg-accent hover:bg-accent/90" onClick={handleAddEmployee}>
@@ -689,18 +777,18 @@ export default function CampusGateApp() {
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                       <CardTitle>Diretório de Funcionários</CardTitle>
-                      <CardDescription>Gerencie o acesso através do RA universitário.</CardDescription>
+                      <CardDescription>Gerencie o acesso através do número de registro.</CardDescription>
                     </div>
                     <div className="relative w-72">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Buscar por RA ou Nome..." className="pl-10 h-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                      <Input placeholder="Buscar por Registro ou Nome..." className="pl-10 h-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
                   </CardHeader>
                   <CardContent>
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/30">
-                          <TableHead className="w-24">RA</TableHead>
+                          <TableHead className="w-24">Registro</TableHead>
                           <TableHead>Nome</TableHead>
                           <TableHead>Departamento</TableHead>
                           <TableHead>E-mail</TableHead>
@@ -739,17 +827,17 @@ export default function CampusGateApp() {
                   <Card className="border-accent/20">
                     <CardHeader>
                       <CardTitle>Vincular Novo Veículo</CardTitle>
-                      <CardDescription>Associe um automóvel ao proprietário pelo RA.</CardDescription>
+                      <CardDescription>Associe um automóvel ao proprietário pelo registro.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
-                        <Label>RA do Proprietário (Funcionário)</Label>
+                        <Label>Registro do Proprietário</Label>
                         <Input
                             placeholder="Ex: RA2024001"
                             value={newVehicle.ownerRa}
                             onChange={(e) => setNewVehicle({...newVehicle, ownerRa: e.target.value.toUpperCase()})}
                         />
-                        <p className="text-[10px] text-muted-foreground italic">Dica: Digite o RA cadastrado no diretório de funcionários.</p>
+                        <p className="text-[10px] text-muted-foreground italic">Dica: Digite o registro cadastrado no diretório.</p>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -801,7 +889,7 @@ export default function CampusGateApp() {
                       <Button
                           className="w-full bg-primary"
                           onClick={handleAddVehicle}
-                          disabled={!newVehicle.ownerRa || !newVehicle.plate}
+                          disabled={!newVehicle.ownerRa || !newVehicle.plate || !newVehicle.make || !newVehicle.model || !newVehicle.color}
                       >
                         <CarFront className="mr-2 h-4 w-4" /> Registrar na Frota
                       </Button>
@@ -823,7 +911,7 @@ export default function CampusGateApp() {
                           <TableHeader className="bg-muted/50">
                             <TableRow>
                               <TableHead>Placa</TableHead>
-                              <TableHead>Dono (RA)</TableHead>
+                              <TableHead>Dono (Registro)</TableHead>
                               <TableHead className="text-right">Ações</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -878,7 +966,7 @@ export default function CampusGateApp() {
                               className="h-14 text-2xl font-mono text-center tracking-[0.3em] bg-white border-green-300 uppercase shadow-inner"
                               placeholder="ABC1234"
                               value={entryPlate}
-                              onChange={(e) => setEntryPlate(e.target.value.toUpperCase())}
+                              onChange={(e) => setEntryPlate(normalizePlateInput(e.target.value))}
                               onKeyDown={(e) => e.key === 'Enter' && handleGateAction(entryPlate, 'entry')}
                           />
                           <Button
@@ -902,7 +990,7 @@ export default function CampusGateApp() {
                               className="h-14 text-2xl font-mono text-center tracking-[0.3em] bg-white border-orange-300 uppercase shadow-inner"
                               placeholder="ABC1234"
                               value={exitPlate}
-                              onChange={(e) => setExitPlate(e.target.value.toUpperCase())}
+                              onChange={(e) => setExitPlate(normalizePlateInput(e.target.value))}
                               onKeyDown={(e) => e.key === 'Enter' && handleGateAction(exitPlate, 'exit')}
                           />
                           <Button
@@ -929,12 +1017,12 @@ export default function CampusGateApp() {
                       <div className="bg-accent/20 p-4 rounded-full"><Search className="h-10 w-10 text-accent" /></div>
                       <div>
                         <CardTitle className="text-3xl font-bold">Busca Unificada CampusGate</CardTitle>
-                        <CardDescription className="text-white/70">Consulte veículos ou funcionários pelo RA universitário.</CardDescription>
+                        <CardDescription className="text-white/70">Consulte veículos ou pessoas pelo registro.</CardDescription>
                       </div>
                       <div className="w-full max-w-2xl relative">
                         <Search className="absolute left-4 top-4 h-6 w-6 text-muted-foreground" />
                         <Input
-                            placeholder="Nome, RA, Placa ou CPF..."
+                            placeholder="Nome, Registro, Placa ou CPF..."
                             className="h-14 pl-12 text-lg bg-white text-foreground rounded-2xl border-accent border-2 shadow-lg"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
@@ -955,7 +1043,7 @@ export default function CampusGateApp() {
                             <div key={e.id} className="p-4 border rounded-xl hover:border-accent transition-all flex justify-between items-center bg-card shadow-sm">
                               <div>
                                 <p className="font-bold text-primary">{e.name}</p>
-                                <p className="text-[10px] text-muted-foreground font-medium uppercase">RA: {e.ra} • {e.department}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase">Registro: {e.ra} • {e.department}</p>
                               </div>
                               <Button variant="ghost" size="sm" onClick={() => { setActiveView('employees'); setSearchQuery(e.ra); }}><Info className="h-4 w-4 text-accent" /></Button>
                             </div>
@@ -974,7 +1062,7 @@ export default function CampusGateApp() {
                             <div key={v.id} className="p-4 border rounded-xl hover:border-accent transition-all flex justify-between items-center bg-card shadow-sm">
                               <div>
                                 <p className="font-mono font-bold text-primary text-lg tracking-widest">{v.plate}</p>
-                                <p className="text-[10px] text-muted-foreground font-medium uppercase">{v.make} {v.model} • RA Dono: {employees.find(e => e.id === v.ownerId)?.ra}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase">{v.make} {v.model} • Registro: {employees.find(e => e.id === v.ownerId)?.ra}</p>
                               </div>
                               <Button variant="ghost" size="sm" onClick={() => { setActiveView('vehicles'); setSearchQuery(v.plate); }}><Info className="h-4 w-4 text-accent" /></Button>
                             </div>
@@ -1001,7 +1089,7 @@ export default function CampusGateApp() {
                         <TableHead>Horário</TableHead>
                         <TableHead>Tipo</TableHead>
                         <TableHead>Placa</TableHead>
-                        <TableHead>Proprietário (RA)</TableHead>
+                        <TableHead>Proprietário (Registro)</TableHead>
                         <TableHead>Porteiro Resp.</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1017,7 +1105,7 @@ export default function CampusGateApp() {
                             <TableCell className="font-mono font-bold tracking-widest text-primary">{log.vehiclePlate}</TableCell>
                             <TableCell className="text-xs font-medium">
                               {log.ownerName}
-                              <span className="block text-[9px] text-muted-foreground">RA: {employees.find(e => e.name === log.ownerName)?.ra || 'N/A'}</span>
+                              <span className="block text-[9px] text-muted-foreground">Registro: {employees.find(e => e.name === log.ownerName)?.ra || 'N/A'}</span>
                             </TableCell>
                             <TableCell>
                               <Badge variant="secondary" className="text-[9px] uppercase font-bold tracking-tighter bg-secondary/80">{log.gatekeeperName}</Badge>
