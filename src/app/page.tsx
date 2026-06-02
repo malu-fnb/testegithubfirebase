@@ -36,7 +36,7 @@ import {
 } from '@/lib/mock-db';
 import { useToast } from '@/hooks/use-toast';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+const API_URL = 'https://campus-gate-api.onrender.com';
 
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
