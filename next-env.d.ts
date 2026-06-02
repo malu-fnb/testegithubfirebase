@@ -1,1 +1,2 @@
-NEXT_PUBLIC_API_URL=https://campus-gate-api.onrender.com
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
